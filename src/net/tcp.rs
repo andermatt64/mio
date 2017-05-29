@@ -6,7 +6,8 @@
 //! matter the target platform.
 //!
 /// [portability guidelines]: ../struct.Poll.html#portability
-
+#[cfg(windows)]
+use std::os::windows::io::{AsRawSocket, RawSocket};
 
 use std::io::{Read, Write};
 use std::net::{self, SocketAddr, SocketAddrV4, SocketAddrV6, Ipv4Addr, Ipv6Addr};
@@ -71,9 +72,9 @@ impl TcpStream {
     /// the connect operation.
     pub fn connect(addr: &SocketAddr) -> io::Result<TcpStream> {
         let sock = try!(match *addr {
-            SocketAddr::V4(..) => TcpBuilder::new_v4(),
-            SocketAddr::V6(..) => TcpBuilder::new_v6(),
-        });
+                            SocketAddr::V4(..) => TcpBuilder::new_v4(),
+                            SocketAddr::V6(..) => TcpBuilder::new_v6(),
+                        });
         // Required on Windows for a future `connect_overlapped` operation to be
         // executed successfully.
         if cfg!(windows) {
@@ -100,12 +101,11 @@ impl TcpStream {
     ///   loop. Note that on Windows you must `bind` a socket before it can be
     ///   connected, so if a custom `TcpBuilder` is used it should be bound
     ///   (perhaps to `INADDR_ANY`) before this method is called.
-    pub fn connect_stream(stream: net::TcpStream,
-                          addr: &SocketAddr) -> io::Result<TcpStream> {
+    pub fn connect_stream(stream: net::TcpStream, addr: &SocketAddr) -> io::Result<TcpStream> {
         Ok(TcpStream {
-            sys: try!(sys::TcpStream::connect(stream, addr)),
-            selector_id: SelectorId::new(),
-        })
+               sys: try!(sys::TcpStream::connect(stream, addr)),
+               selector_id: SelectorId::new(),
+           })
     }
 
     /// Creates a new `TcpStream` from a standard `net::TcpStream`.
@@ -121,9 +121,9 @@ impl TcpStream {
     pub fn from_stream(stream: net::TcpStream) -> io::Result<TcpStream> {
         try!(stream.set_nonblocking(true));
         Ok(TcpStream {
-            sys: sys::TcpStream::from_stream(stream),
-            selector_id: SelectorId::new(),
-        })
+               sys: sys::TcpStream::from_stream(stream),
+               selector_id: SelectorId::new(),
+           })
     }
 
     /// Returns the socket address of the remote peer of this TCP connection.
@@ -143,12 +143,14 @@ impl TcpStream {
     /// data, and options set on one stream will be propagated to the other
     /// stream.
     pub fn try_clone(&self) -> io::Result<TcpStream> {
-        self.sys.try_clone().map(|s| {
-            TcpStream {
-                sys: s,
-                selector_id: self.selector_id.clone(),
-            }
-        })
+        self.sys
+            .try_clone()
+            .map(|s| {
+                     TcpStream {
+                         sys: s,
+                         selector_id: self.selector_id.clone(),
+                     }
+                 })
     }
 
     /// Shuts down the read, write, or both halves of this connection.
@@ -300,11 +302,8 @@ impl TcpStream {
     #[cfg(feature = "with-deprecated")]
     #[doc(hidden)]
     pub fn keepalive_ms(&self) -> io::Result<Option<u32>> {
-        self.keepalive().map(|v| {
-            v.map(|v| {
-                ::convert::millis(v) as u32
-            })
-        })
+        self.keepalive()
+            .map(|v| v.map(|v| ::convert::millis(v) as u32))
     }
 
     /// Get the value of the `SO_ERROR` option on this socket.
@@ -401,14 +400,22 @@ impl<'a> Write for &'a TcpStream {
 }
 
 impl Evented for TcpStream {
-    fn register(&self, poll: &Poll, token: Token,
-                interest: Ready, opts: PollOpt) -> io::Result<()> {
+    fn register(&self,
+                poll: &Poll,
+                token: Token,
+                interest: Ready,
+                opts: PollOpt)
+                -> io::Result<()> {
         try!(self.selector_id.associate_selector(poll));
         self.sys.register(poll, token, interest, opts)
     }
 
-    fn reregister(&self, poll: &Poll, token: Token,
-                  interest: Ready, opts: PollOpt) -> io::Result<()> {
+    fn reregister(&self,
+                  poll: &Poll,
+                  token: Token,
+                  interest: Ready,
+                  opts: PollOpt)
+                  -> io::Result<()> {
         self.sys.reregister(poll, token, interest, opts)
     }
 
@@ -469,9 +476,9 @@ impl TcpListener {
     pub fn bind(addr: &SocketAddr) -> io::Result<TcpListener> {
         // Create the socket
         let sock = try!(match *addr {
-            SocketAddr::V4(..) => TcpBuilder::new_v4(),
-            SocketAddr::V6(..) => TcpBuilder::new_v6(),
-        });
+                            SocketAddr::V4(..) => TcpBuilder::new_v4(),
+                            SocketAddr::V6(..) => TcpBuilder::new_v6(),
+                        });
 
         // Set SO_REUSEADDR, but only on Unix (mirrors what libstd does)
         if cfg!(unix) {
@@ -484,9 +491,9 @@ impl TcpListener {
         // listen
         let listener = try!(sock.listen(1024));
         Ok(TcpListener {
-            sys: try!(sys::TcpListener::new(listener, addr)),
-            selector_id: SelectorId::new(),
-        })
+               sys: try!(sys::TcpListener::new(listener, addr)),
+               selector_id: SelectorId::new(),
+           })
     }
 
     /// Creates a new `TcpListener` from an instance of a
@@ -498,14 +505,13 @@ impl TcpListener {
     /// loop.
     ///
     /// The address provided must be the address that the listener is bound to.
-    pub fn from_listener(listener: net::TcpListener, addr: &SocketAddr)
-                         -> io::Result<TcpListener> {
+    pub fn from_listener(listener: net::TcpListener, addr: &SocketAddr) -> io::Result<TcpListener> {
         sys::TcpListener::new(listener, addr).map(|s| {
-            TcpListener {
-                sys: s,
-                selector_id: SelectorId::new(),
-            }
-        })
+                                                      TcpListener {
+                                                          sys: s,
+                                                          selector_id: SelectorId::new(),
+                                                      }
+                                                  })
     }
 
     /// Accepts a new `TcpStream`.
@@ -518,14 +524,16 @@ impl TcpListener {
     /// If an accepted stream is returned, the remote address of the peer is
     /// returned along with it.
     pub fn accept(&self) -> io::Result<(TcpStream, SocketAddr)> {
-        self.sys.accept().map(|(s, a)| {
-            let stream = TcpStream {
-                sys: s,
-                selector_id: SelectorId::new(),
-            };
+        self.sys
+            .accept()
+            .map(|(s, a)| {
+                     let stream = TcpStream {
+                         sys: s,
+                         selector_id: SelectorId::new(),
+                     };
 
-            (stream, a)
-        })
+                     (stream, a)
+                 })
     }
 
     /// Returns the local socket address of this listener.
@@ -539,12 +547,14 @@ impl TcpListener {
     /// object references. Both handles can be used to accept incoming
     /// connections and options set on one listener will affect the other.
     pub fn try_clone(&self) -> io::Result<TcpListener> {
-        self.sys.try_clone().map(|s| {
-            TcpListener {
-                sys: s,
-                selector_id: self.selector_id.clone(),
-            }
-        })
+        self.sys
+            .try_clone()
+            .map(|s| {
+                     TcpListener {
+                         sys: s,
+                         selector_id: self.selector_id.clone(),
+                     }
+                 })
     }
 
     /// Sets the value for the `IP_TTL` option on this socket.
@@ -596,14 +606,22 @@ impl TcpListener {
 }
 
 impl Evented for TcpListener {
-    fn register(&self, poll: &Poll, token: Token,
-                interest: Ready, opts: PollOpt) -> io::Result<()> {
+    fn register(&self,
+                poll: &Poll,
+                token: Token,
+                interest: Ready,
+                opts: PollOpt)
+                -> io::Result<()> {
         try!(self.selector_id.associate_selector(poll));
         self.sys.register(poll, token, interest, opts)
     }
 
-    fn reregister(&self, poll: &Poll, token: Token,
-                  interest: Ready, opts: PollOpt) -> io::Result<()> {
+    fn reregister(&self,
+                  poll: &Poll,
+                  token: Token,
+                  interest: Ready,
+                  opts: PollOpt)
+                  -> io::Result<()> {
         self.sys.reregister(poll, token, interest, opts)
     }
 
@@ -632,6 +650,13 @@ impl IntoRawFd for TcpStream {
 impl AsRawFd for TcpStream {
     fn as_raw_fd(&self) -> RawFd {
         self.sys.as_raw_fd()
+    }
+}
+
+#[cfg(windows)]
+impl AsRawSocket for TcpStream {
+    fn as_raw_socket(&self) -> RawSocket {
+        self.sys.as_raw_socket()
     }
 }
 
